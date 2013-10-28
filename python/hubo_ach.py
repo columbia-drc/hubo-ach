@@ -28,7 +28,7 @@
 # */
 
 # from ctypes import *
-from ctypes import Structure,c_uint16,c_double,c_ubyte,c_uint32,c_int16
+from ctypes import Structure,c_uint16,c_double,c_ubyte,c_uint32,c_int16, Union
 # import ach
 # import sys
 
@@ -52,6 +52,8 @@ HUBO_CHAN_BOARD_PARAM_NAME        = 'hubo-board-param' # hubo param ach channel
 HUBO_CHAN_REF_FILTER_NAME         = 'hubo-ref-filter'  # hubo reference with filter ach channel
 HUBO_CHAN_VIRTUAL_TO_SIM_NAME     = 'hubo-virtual-to-sim'
 HUBO_CHAN_VIRTUAL_FROM_SIM_NAME   = 'hubo-virtual-from-sim'
+HUBO_CHAN_MANIP_CMD = 'manip-cmd'
+
 HUBO_LOOP_PERIOD                  = 0.005
 
 RHY = 26 # Right Hip Yaw
@@ -226,3 +228,97 @@ class HUBO_REF(Structure):
                 ("mode",   c_int16*HUBO_JOINT_COUNT),
                 ("comply", c_ubyte*HUBO_JOINT_COUNT)]
 
+
+
+class QUAT(Structure):
+    _fields_ = [("w",c_double),
+		("i",c_double),
+		("j",c_double),
+		("k",c_double)]
+	
+class EULER(Structure):
+    _fields_ = [("alpha", c_double),
+		("beta", c_double),
+		("gamma", c_double),
+		("empty", c_double)]
+
+class ORIENTATION(Union):
+    _anonymous = ["Quat", "Euler"]
+    _fields_ = [("Quat",QUAT),
+		("Euler",EULER)]
+    
+class POSE(Structure):
+    _anonymous_ = ["orientation"]
+    _fields_ = [("x",c_double),
+		("y",c_double),
+		("z",c_double),
+		("orientation",ORIENTATION)]
+
+    
+
+class HUBO_MANIP_POSE(Structure):
+    #no anonymous unions allowed. Ignore them for now and just use the data member
+    _fields_ = [("data", 7*c_double)]
+    _pack_ = 1
+
+
+class HUBO_MANIP_MODE(c_int):
+    pass
+
+class HUBO_MANIP_CONTROL(c_int):
+    pass
+
+class HUBO_MANIP_GRASP(c_int):
+    pass
+
+class HUBO_MANIP_FRAME(c_int):
+    pass
+
+class HUBO_MANIP_WRENCH(Structure):
+    _fields_ = [("data",6*c_double)]
+    _pack_ = 1
+
+class HUBO_MANIP_TOOL(Structure):
+    _fields_ = [("mass",c_double),
+		("com_x",c_double),
+		("com_y",c_double),
+		("com_z",c_double),
+		("t_pose",HUBO_MANIP_POSE)]
+    _pack_ = 1
+	       
+
+
+class HUBO_MANIP_COMMAND(Structure):
+    _fields_ = [("goalID",c_int*2),
+		("m_mode",HUBO_MANIP_MODE*2),
+		("m_ctrl",HUBO_MANIP_CONTROL*2),
+		("m_grasp",HUBO_MANIP_GRASP * 2),
+		("trigger",HUBO_MANIP_GRASP),
+		("m_frame",HUBO_MANIP_FRAME*2),
+		("eeSpeedOverride", c_int),
+		("eeNomSpeed",c_double),
+		("eeRotationalSpeedOverride",c_int),
+		("eeNomRotationSpeed",c_double),
+		("m_tool",HUBO_MANIP_TOOL*2),
+		("m_wrench",HUBO_MANIP_WRENCH*2),
+		("interrupt", c_ubyte),
+		("waistAngle",c_double),
+		("pose",HUBO_MANIP_POSE*2),
+		("dual_offset",HUBO_MANIP_POSE*2),
+		("arm_angles",c_double*14),
+		("stopNorm",c_double),
+		("convergeNorm",c_double)]
+    _pack_ = 1
+	       
+		
+    
+	
+	
+		
+
+
+    
+
+
+		
+    
