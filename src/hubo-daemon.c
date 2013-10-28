@@ -137,10 +137,14 @@ int ref2enc( int jnt, double ref, hubo_param_t *h );
 void hInitializeBoard(int jnt, hubo_param_t *h, struct can_frame *f);
 int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
 double enc2rad(int jnt, int enc, hubo_param_t *h);
+double enc2radNkDrc(int jnt, int enc, hubo_param_t *h);
 void hGetEncValue(int jnt, uint8_t encChoice, hubo_param_t *h, struct can_frame *f);
 void fGetEncValue(int jnt, uint8_t encChoice, hubo_param_t *h, struct can_frame *f);
 void getEncAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
 void getCurrentAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
+void hgetPowerVals(hubo_param_t *h, struct can_frame *f);
+void fgetPowerVals(hubo_param_t *h, struct can_frame *f);
+void getPower(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
 void hGetFT(int board, struct can_frame *f, int can);
 void fGetFT(int board, struct can_frame *f);
 void getFTAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f);
@@ -273,6 +277,7 @@ uint8_t HUBO_FLAG_GET_DRC_BOARD_PARAM = ON;  // if ON will check for board param
 
 // ach channels
 ach_channel_t chan_hubo_ref;      // hubo-ach
+ach_channel_t chan_hubo_ref_neck;      // hubo-ach neck
 ach_channel_t chan_hubo_board_cmd; // hubo-ach-console
 ach_channel_t chan_hubo_state;    // hubo-ach-state
 ach_channel_t chan_hubo_gains;      // PWM Control gains
@@ -297,12 +302,14 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
     int i = 0;  // iterator
     // get initial values for hubo
     hubo_ref_t H_ref;
+    hubo_ref_t H_ref_neck;
     hubo_ref_t H_ref_filter;
     hubo_pwm_gains_t H_gains;
     hubo_board_cmd_t H_cmd;
     hubo_state_t H_state;
     hubo_virtual_t H_virtual;
     memset( &H_ref,   0, sizeof(H_ref));
+    memset( &H_ref_neck,   0, sizeof(H_ref_neck));
     memset( &H_ref_filter, 0, sizeof(H_ref_filter) );
     memset( &H_cmd,  0, sizeof(H_cmd));
     memset( &H_state, 0, sizeof(H_state));
@@ -313,6 +320,11 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
     int r = ach_get( &chan_hubo_ref, &H_ref, sizeof(H_ref), &fs, NULL, ACH_O_LAST );
     if(ACH_OK != r) {fprintf(stderr, "Ref r = %s\n",ach_result_to_string(r));}
     hubo_assert( sizeof(H_ref) == fs, __LINE__ );
+
+    r = ach_get( &chan_hubo_ref_neck, &H_ref_neck, sizeof(H_ref_neck), &fs, NULL, ACH_O_LAST );
+    if(ACH_OK != r) {fprintf(stderr, "Ref_Neck r = %s\n",ach_result_to_string(r));}
+    hubo_assert( sizeof(H_ref_neck) == fs, __LINE__ );
+
     r = ach_get( &chan_hubo_board_cmd, &H_cmd, sizeof(H_cmd), &fs, NULL, ACH_O_LAST );
     if(ACH_OK != r) {fprintf(stderr, "CMD r = %s\n",ach_result_to_string(r));}
     hubo_assert( sizeof(H_cmd) == fs, __LINE__ );
@@ -346,6 +358,7 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
     /* set encoder values to ref and state */
     for( i = 0; i < HUBO_JOINT_COUNT; i++ ) {
         H_ref.ref[i] = H_state.joint[i].pos;
+        H_ref_neck.ref[i] = H_ref.ref[i];
         H_ref.mode[i] = HUBO_REF_MODE_REF_FILTER;
         H_ref_filter.ref[i] = H_state.joint[i].pos;
         H_state.joint[i].ref = H_state.joint[i].pos;
@@ -367,6 +380,7 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
 
     /* put back on channels */
     ach_put(&chan_hubo_ref, &H_ref, sizeof(H_ref));
+    ach_put(&chan_hubo_ref_neck, &H_ref_neck, sizeof(H_ref_neck));
     ach_put(&chan_hubo_board_cmd, &H_cmd, sizeof(H_cmd));
 //    ach_put(&chan_hubo_state, &H_state, sizeof(H_state));
 
@@ -431,6 +445,21 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
             }
         else{    hubo_assert( sizeof(H_ref) == fs, __LINE__ ); }
 
+	/* Modified for neck - get neck first, then put it on the ref channel struct */
+        r = ach_get( &chan_hubo_ref_neck, &H_ref_neck, sizeof(H_ref_neck), &fs, NULL, ACH_O_LAST );  
+        if(ACH_OK != r) {
+            if(debug) {
+                    fprintf(stderr, "Ref Neck r = %s\n",ach_result_to_string(r));}
+            }
+        else{    hubo_assert( sizeof(H_ref) == fs, __LINE__ ); }
+
+        /* set the ref to the new neck values */
+	H_ref.ref[NKY] = H_ref_neck.ref[NKY];
+	H_ref.ref[NK1] = H_ref_neck.ref[NK1];
+	H_ref.ref[NK2] = H_ref_neck.ref[NK2];
+
+
+
         r = ach_get( &chan_hubo_gains, &H_gains, sizeof(H_gains), &fs, NULL, ACH_O_LAST );
         if( !( ACH_OK==r || ACH_STALE_FRAMES==r || ACH_MISSED_FRAME==r ) )
             fprintf( stderr, "Unexpected ach result in the gains channel: %s\n",
@@ -481,6 +510,12 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
         /* Get IMU data */
         getIMUAllSlow(&H_state, H_param, &frame);
 
+		/* Get Power data */
+		getPower(&H_state, H_param, &frame);
+
+		/* Get Power data */
+		getPower(&H_state, H_param, &frame);
+
         /* Update next joint status (one each loop) */
         getStatusIterate( &H_state, H_param, &frame);
 
@@ -489,7 +524,7 @@ void huboLoop(hubo_param_t *H_param, int vflag) {
 
 
         /* Get all Current data */
-//        getCurrentAllSlow(&H_state, H_param, &frame);
+        getCurrentAllSlow(&H_state, H_param, &frame);
 
         // Get current timestamp to send out with the state struct
 
@@ -764,6 +799,26 @@ void getEncAllSlow(hubo_state_t *s, hubo_param_t *h, struct can_frame *f)
             }
         }
     }
+}
+
+
+void hgetPowerVals(hubo_param_t *h, struct can_frame *f){
+    fgetPowerVals(h, f);
+    sendCan(hubo_socket[UPPER_CAN], f);
+}
+
+void fgetPowerVals(hubo_param_t *h, struct can_frame *f){
+	f->can_id = CMD_TXDF;
+	//f->can_id = REF_BASE_TXDF + 14;
+	f->data[0] = JMC14;
+	f->data[1] = H_VCREAD;
+	f->can_dlc = 2;
+}
+
+void getPower(hubo_state_t *s, hubo_param_t *h, struct can_frame *f){
+	hgetPowerVals(h, f);
+	readCan(hubo_socket[UPPER_CAN], f, HUBO_CAN_TIMEOUT_DEFAULT);
+	decodeFrame(s, h, f);	
 }
 
 
@@ -3111,6 +3166,10 @@ double enc2rad(int jnt, int enc, hubo_param_t *h) {
         return (double)(enc*(double)p->drive/(double)p->driven/(double)p->harmonic/(double)p->enc*2.0*M_PI);
 }
 
+double enc2radNkDrc(int jnt, int enc, hubo_param_t *h) {
+    hubo_joint_param_t *p = &h->joint[jnt];
+        return (double)( ((double)enc/4096.0*2.0*M_PI) - M_PI);
+}
 
 double doubleFromBytePair(uint8_t data0, uint8_t data1){
 	unsigned int tmp = 0;
@@ -3165,9 +3224,19 @@ void decodeIMUFrame(int num, struct hubo_state *s, struct can_frame *f){
 
 int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
     int fs = (int)f->can_id;
-    
+
+    if (fs == H_ENC_BASE_RXDF + 0xE)
+    {
+        // Voltage, Current Return Message
+        double voltage = doubleFromBytePair(f->data[1],f->data[0])/100.0;
+        double current = doubleFromBytePair(f->data[3],f->data[2])/100.0;
+        double power   = doubleFromBytePair(f->data[5],f->data[4])/10.0;
+        s->power.voltage = voltage;
+        s->power.current = current;
+        s->power.power = power;	
+    }
     /* Force-Torque Readings */
-    if( (fs >= H_SENSOR_FT_BASE_RXDF) && (fs <= H_SENSOR_FT_MAX_RXDF) )
+    else if( (fs >= H_SENSOR_FT_BASE_RXDF) && (fs <= H_SENSOR_FT_MAX_RXDF) )
     {
         int num = fs - H_SENSOR_FT_BASE_RXDF;
         int16_t val;
@@ -3400,7 +3469,21 @@ int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
                 s->joint[jnt].vel = (newPos - s->joint[jnt].pos)/HUBO_LOOP_PERIOD;
                 s->joint[jnt].pos = newPos;
             }
-        }
+        }        
+        else if( (numMot == 3) & (hubo_type == HUBO_ROBOT_TYPE_DRC_HUBO) & (jmc == EJMC2) ) {
+            for( i = 0; i < numMot; i++ )
+            {
+                enc16 = 0;
+                enc16 = (enc << 8) + f->data[0 + i*2];
+                enc16 = (enc << 8) + f->data[1 + i*2];
+                int jnt = h->driver[jmc].joints[i];          // motor on the same drive
+                int jntInt = (int)((short)((f->data[0+i*2])|(f->data[1+i*2]<<8)));
+                double newPos = enc2radNkDrc(jnt, jntInt, h);
+                s->joint[jnt].vel = (newPos - s->joint[jnt].pos)/HUBO_LOOP_PERIOD;
+                s->joint[jnt].pos = newPos;
+            }
+
+	}
         /* DRC Fingers and Writst Yaw 2 */
         else if( (numMot == 3) & (hubo_type == HUBO_ROBOT_TYPE_DRC_HUBO)) {
 
@@ -3513,7 +3596,6 @@ int decodeFrame(hubo_state_t *s, hubo_param_t *h, struct can_frame *f) {
             }
         }
     } 
-    
     return 0;
 }
 
@@ -3573,11 +3655,13 @@ int main(int argc, char **argv) {
 
     // Initialize Hubo Structs
     hubo_ref_t H_ref;
+    hubo_ref_t H_ref_neck;
     hubo_board_cmd_t H_cmd;
     hubo_state_t H_state;
     hubo_param_t H_param;
     hubo_virtual_t H_virtual;
     memset( &H_ref,   0, sizeof(H_ref));
+    memset( &H_ref_neck,   0, sizeof(H_ref_neck));
     memset( &H_cmd,  0, sizeof(H_cmd));
     memset( &H_state, 0, sizeof(H_state));
     memset( &H_param, 0, sizeof(H_param));
@@ -3586,6 +3670,9 @@ int main(int argc, char **argv) {
 
     // open hubo reference
     int r = ach_open(&chan_hubo_ref, HUBO_CHAN_REF_NAME, NULL);
+    hubo_assert( ACH_OK == r, __LINE__ );
+
+    r = ach_open(&chan_hubo_ref_neck, HUBO_CHAN_REF_NECK_NAME, NULL);
     hubo_assert( ACH_OK == r, __LINE__ );
 
     r = ach_open(&chan_hubo_gains, HUBO_CHAN_PWM_GAINS_NAME, NULL);
@@ -3613,6 +3700,7 @@ int main(int argc, char **argv) {
 
     openAllCAN( vflag );
     ach_put(&chan_hubo_ref, &H_ref, sizeof(H_ref));
+    ach_put(&chan_hubo_ref_neck, &H_ref_neck, sizeof(H_ref_neck));
     ach_put(&chan_hubo_board_cmd, &H_cmd, sizeof(H_cmd));
 //    ach_put(&chan_hubo_state, &H_state, sizeof(H_state));
     ach_put(&chan_hubo_to_sim, &H_virtual, sizeof(H_virtual));

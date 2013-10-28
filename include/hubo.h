@@ -113,6 +113,7 @@ extern "C" {
 #define         HUBO_SENSOR_COUNT       0x36-BNO_SENSOR_BASE    ///> The max number of sensor units
 
 #define		HUBO_CHAN_REF_NAME         "hubo-ref"                    ///> hubo ach channel
+#define		HUBO_CHAN_REF_NECK_NAME    "hubo-ref-neck"               ///> hubo ach channel ref for neck
 #define		HUBO_CHAN_BOARD_CMD_NAME   "hubo-board-cmd"              ///> hubo console channel for ach
 #define		HUBO_CHAN_STATE_NAME       "hubo-state"                  ///> hubo state ach channel
 #define         HUBO_CHAN_PWM_GAINS_NAME   "hubo-pwm-gains"              ///> PWM Gain control channel
@@ -375,12 +376,19 @@ typedef struct hubo_jmc_state {
 	//	 or whether motor control / FETs are on
 }__attribute__((packed)) hubo_jmc_state_t;
 
+typedef struct hubo_power {
+	double voltage;
+	double current;
+	double power;
+}__attribute__((packed)) hubo_power_t;
+
 typedef struct hubo_state {
 	hubo_imu_t imu[HUBO_IMU_COUNT];	///< IMU
 	hubo_ft_t ft[4];   ///< ft sensors
 	struct hubo_joint_state joint[HUBO_JOINT_COUNT]; ///> Joint pos, velos, and current
         hubo_joint_status_t status[HUBO_JOINT_COUNT];
 	struct hubo_jmc_state driver[HUBO_JMC_COUNT];
+	hubo_power_t power; // back power board
         double time;
 	int16_t refWait;
 }__attribute__((packed)) hubo_state_t;

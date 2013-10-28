@@ -45,6 +45,7 @@ HUBO_JOINT_COUNT                  = 42
 HUBO_JMC_COUNT                    = 0x36
 HUBO_IMU_COUNT                    = 3
 HUBO_CHAN_REF_NAME                = 'hubo-ref'
+HUBO_CHAN_REF_NECK_NAME           = 'hubo-ref-neck'
 HUBO_CHAN_BOARD_CMD_NAME          = 'hubo-board-cmd'
 HUBO_CHAN_STATE_NAME              = 'hubo-state'
 HUBO_CHAN_PWM_GAINS_NAME          = 'hubo-pwm-gains'   # PWM Gain control channel
@@ -209,6 +210,12 @@ class HUBO_JMC_STATE(Structure):
     _pack_ = 1
     _fields_ = [("temp" , c_double)]
 
+class HUBO_POWER(Structure):
+	_pack_ = 1
+	_fields_ = [("voltage", c_double),
+				("current", c_double),
+				("power", c_double)]
+
 class HUBO_STATE(Structure):
     _pack_ = 1
     _fields_ = [("imu"    , HUBO_IMU*HUBO_IMU_COUNT),
@@ -216,6 +223,7 @@ class HUBO_STATE(Structure):
                 ("joint"  , HUBO_JOINT_STATE*HUBO_JOINT_COUNT),
                 ("status" , HUBO_JOINT_STATUS*HUBO_JOINT_COUNT),
                 ("driver" , HUBO_JMC_STATE*HUBO_JMC_COUNT),
+				("power"  , HUBO_POWER),
                 ("time"   , c_double),
                 ("refWait", c_int16)]
 
