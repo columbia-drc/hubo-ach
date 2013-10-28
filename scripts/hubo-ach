@@ -493,13 +493,13 @@ OpenHubo()
 			'remote')
 				Remote $6
                                 HUBO_SIM_ARGS='nophysics simtime '$FLAG_OPENHUBO
-				python -i /etc/hubo-ach/virtualHubo.py $HUBO_SIM_ARGS
+				xterm -e python -i /etc/hubo-ach/virtualHubo.py $HUBO_SIM_ARGS
 				#python -i /etc/hubo-ach/virtualHubo.py nophysics simtime $FLAG_OPENHUBO
 			;;
 			*)
 				SetSim
                                 HUBO_SIM_ARGS='nophysics simtime '$FLAG_OPENHUBO
-				python -i /etc/hubo-ach/virtualHubo.py $HUBO_SIM_ARGS
+				xterm -e python -i /etc/hubo-ach/virtualHubo.py $HUBO_SIM_ARGS
 				#python -i /etc/hubo-ach/virtualHubo.py nophysics simtime $FLAG_OPENHUBO
 			;;
 			esac
