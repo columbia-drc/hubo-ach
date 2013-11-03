@@ -28,7 +28,7 @@
 # */
 
 # from ctypes import *
-from ctypes import Structure,c_uint16,c_double,c_ubyte,c_uint32,c_int16, Union
+from ctypes import Structure,c_uint16,c_double,c_ubyte,c_uint32,c_int16, Union, c_int
 # import ach
 # import sys
 
